@@ -1,6 +1,7 @@
 # Generate data
 x <- rnorm(100, mean = 1, sd = 2^(1/2))
 y <- rnorm(100, mean = 2+3*x, sd = 5^(1/2))
+epsilon <- 1e-6
 
 # Loss function as specified in the problem
 f_0 <- function(beta, X, y, n) {
@@ -25,21 +26,40 @@ gradient_descent <- function(X, y, eta=0.01, epsilon=1e-6, max_iter=10000) {
   # Track loss values
   loss_history <- c()
   
+  # Track beta values (for visualization of descent path)
+  beta_history <- matrix(0, nrow=max_iter, ncol=2)
+  
+  # Track gradient norms
+  grad_norm_history <- c()
+  
   for (i in 1:max_iter) {
     # Current loss
     current_loss <- f_0(beta, X_mat, y, n)
     loss_history <- c(loss_history, current_loss)
     
+    # Store current beta
+    beta_history[i,] <- t(beta)
+    
     # Compute gradient
     gradient <- grad_f(beta, X_mat, y, n)
+    
+    # Compute gradient norm
+    grad_norm <- sqrt(sum(gradient^2))
+    grad_norm_history <- c(grad_norm_history, grad_norm)
+    
+    # Check convergence based on gradient norm
+    if (grad_norm < epsilon) {
+      cat("Converged after", i, "iterations (gradient norm < epsilon)\n")
+      break
+    }
     
     # Update beta
     beta_new <- beta - eta * gradient
     
-    # Check convergence
+    # Alternative convergence check based on loss difference
     if (i > 1) {
       if (abs(loss_history[i-1] - current_loss) < epsilon) {
-        cat("Converged after", i, "iterations\n")
+        cat("Converged after", i, "iterations (loss difference < epsilon)\n")
         break
       }
     }
@@ -60,7 +80,9 @@ gradient_descent <- function(X, y, eta=0.01, epsilon=1e-6, max_iter=10000) {
     slope = beta[2], 
     iterations = i,
     loss = current_loss,
-    loss_history = loss_history
+    loss_history = loss_history,
+    beta_history = beta_history[1:i,],
+    grad_norm_history = grad_norm_history
   ))
 }
 
@@ -96,6 +118,27 @@ text(length(result$loss_history)/2, result$loss*1.1,
 X_mat <- cbind(1, x)
 beta_analytical <- solve(t(X_mat) %*% X_mat) %*% t(X_mat) %*% y
 analytical_loss <- f_0(beta_analytical, X_mat, y, length(y))
+
+# Create a plot of the descent path
+par(mfrow=c(1,2))
+
+# Plot 1: Parameter path
+plot(result$beta_history[,1], result$beta_history[,2], type="b", col="blue",
+     xlab="Intercept (β₀)", ylab="Slope (β₁)", main="Parameter Descent Path",
+     pch=20, cex=0.6)
+points(result$beta_history[1,1], result$beta_history[1,2], col="green", pch=19, cex=1.5)  # Start
+points(result$intercept, result$slope, col="red", pch=19, cex=1.5)  # End
+points(beta_analytical[1], beta_analytical[2], col="purple", pch=19, cex=1.5)  # Analytical
+legend("topright", legend=c("Path", "Start", "End", "Analytical"), 
+       col=c("blue", "green", "red", "purple"), pch=c(20,19,19,19), cex=0.8)
+
+# Plot 2: Gradient norm over iterations
+plot(1:length(result$grad_norm_history), result$grad_norm_history, type="l", 
+     col="darkgreen", xlab="Iteration", ylab="Gradient Norm", 
+     main="Gradient Norm vs Iterations", lwd=2)
+abline(h=epsilon, col="red", lty=2)
+text(length(result$grad_norm_history)/2, epsilon*1.5, 
+     paste("Epsilon threshold:", epsilon), col="red", pos=3)
 
 cat("\n----- Gradient Descent Summary -----\n")
 cat("Final solution:\n")
